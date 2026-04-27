@@ -1,11 +1,12 @@
 import argparse
-from transformers import AdamW, BertTokenizer, RobertaTokenizer, BertConfig, RobertaConfig
+from torch.optim import AdamW
+from transformers import BertTokenizer, RobertaTokenizer, BertConfig, RobertaConfig
 import glob
 import logging
 import os
 import random
 from collections import defaultdict as ddict
-from pytorch_transformers import WarmupLinearSchedule
+from transformers import get_linear_schedule_with_warmup
 import torch
 import ppdpp.utils as utils
 import ppdpp.data_reader as data_reader
@@ -93,7 +94,7 @@ def train(args, train_dataset, model, tokenizer):
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total)
     
     # multi-gpu training (should be after apex fp16 initialization)
     if len(args.device_id) > 1:
@@ -390,14 +391,14 @@ def arg_parser():
     parser.add_argument('--entropy_bound', type=float, default=1.67)
     parser.add_argument('--sub_value', type=float, default=0.0)
     parser.add_argument('--mcts_applied_ratio', type=float, default=0.0)
-    parser.add_argument('--system', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
-    parser.add_argument('--user', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
-    parser.add_argument('--critic', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
-    parser.add_argument('--planner', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
+    parser.add_argument('--system', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
+    parser.add_argument('--user', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
+    parser.add_argument('--critic', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
+    parser.add_argument('--planner', type=str, default='chatgpt', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
     parser.add_argument('--gamma', type=float, default=0.999, help='reward discount factor.')
     parser.add_argument('--lmbda', type=float, default=0.95, help='reward discount factor.')
     parser.add_argument('--max_turn', type=int, default=8, help='max conversation turn')

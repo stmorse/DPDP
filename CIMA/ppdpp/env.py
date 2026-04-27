@@ -1,9 +1,6 @@
+import os
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-
-from fastchat.model import load_model, get_conversation_template
-from fastchat.modules.gptq import GptqConfig
-from fastchat.modules.awq import AWQConfig
 
 from openai import OpenAI
 import requests
@@ -29,6 +26,9 @@ message_format = {'esc': ESConvMessages, 'cima': CIMAMessages, 'cb': CBMessages}
 class Env(object):
     def __init__(self, args, dataset, mode, env_model=None, env_tokenizer=None):
         if 'vicuna' in [args.system, args.user, args.critic] or 'llama2' in [args.system, args.user, args.critic]:
+            from fastchat.model import load_model, get_conversation_template
+            from fastchat.modules.gptq import GptqConfig
+            from fastchat.modules.awq import AWQConfig
             if mode == 'train':
                 gptq_config=GptqConfig(
                     ckpt=args.model_path,
@@ -299,6 +299,16 @@ class Env(object):
                 temperature=temperature
             )
             self.apply_chatgpt_times += 1
+        elif model == 'ollama':
+            messages = chatgpt_prompt(messages, role)
+            output = query_openai_model(
+                messages=messages,
+                model="llama3.2:latest",
+                max_tokens=self.args.resp_max_new_tokens,
+                temperature=temperature,
+                base_url="http://localhost:11434/v1",
+            )
+            self.apply_chatgpt_times += 1
         return output
     
     def compute_reward(self, model, messages, case):
@@ -348,7 +358,18 @@ class Env(object):
                 n=10
             )
             self.apply_chatgpt_times += 1
-        
+        elif model == 'ollama':
+            messages = chatgpt_prompt(messages, user_role[self.args.data_name])
+            outputs = query_openai_model(
+                messages=messages,
+                model="llama3.2:latest",
+                max_tokens=self.args.reward_max_new_tokens,
+                temperature=1.1,
+                n=10,
+                base_url="http://localhost:11434/v1",
+            )
+            self.apply_chatgpt_times += 1
+
         if self.args.data_name in ['esc','cima']:
             rewards, user_actions = [], ddict(int)
             self.logger.info("[{}]".format(", ".join(outputs)))
@@ -392,32 +413,48 @@ class Env(object):
         return reward, max_freq_action
 
 
-def query_openai_model(messages: str, model: str = "gpt-3.5-turbo-0613", max_tokens: int = 128, temperature: float = 0, n: int = 1):
-    api_key = 'xxxxxxxxxx'
-    client = OpenAI(api_key=api_key)
+def query_openai_model(messages: str, model: str = "gpt-3.5-turbo-0613", max_tokens: int = 128, temperature: float = 0, n: int = 1, base_url: str = None):
+    api_key = os.environ.get("OPENAI_API_KEY", "ollama")
+    client_kwargs = {"api_key": api_key}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    client = OpenAI(**client_kwargs)
     flag = True
     while flag:
         try:
             start_t = time.time()
-            completions = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=max_tokens,
-                n=n,
-                stop=None,
-                temperature=temperature,
-            )
-
-            if n == 1:
-                output = completions.choices[0].message.content.strip()
-            else:
+            if base_url and n > 1:
+                # Ollama doesn't support n>1, so loop
                 output = []
-                for choice in completions.choices:
-                    output.append(choice.message.content.strip())
+                for _ in range(n):
+                    completions = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        n=1,
+                        stop=None,
+                        temperature=temperature,
+                    )
+                    output.append(completions.choices[0].message.content.strip())
+            else:
+                completions = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    n=n,
+                    stop=None,
+                    temperature=temperature,
+                )
+                if n == 1:
+                    output = completions.choices[0].message.content.strip()
+                else:
+                    output = []
+                    for choice in completions.choices:
+                        output.append(choice.message.content.strip())
 
             flag = False
             end_t = time.time()
         except Exception as e:
-            print("Some error happened here.")
+            print(f"API error: {e}")
             time.sleep(5)
     return output

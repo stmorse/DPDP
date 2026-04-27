@@ -4,11 +4,10 @@ from ppdpp.utils import *
 from itertools import count
 from tqdm import tqdm
 import os, json
-import logging, wandb
+import logging
 import argparse
 from collections import defaultdict as ddict
 from transformers import BertTokenizer, RobertaTokenizer, BertConfig, RobertaConfig
-from fastchat.model import add_model_args
 
 tok = {'bert': BertTokenizer, 'roberta': RobertaTokenizer}
 cfg = {'bert': BertConfig, 'roberta': RobertaConfig}
@@ -436,14 +435,14 @@ def parse_args():
 
     parser.add_argument('--data_name', type=str, default='esc', choices=['esc','cima','cb'],
                         help='One of {esc, cima, cb}.')
-    parser.add_argument('--system', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
-    parser.add_argument('--user', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
-    parser.add_argument('--critic', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
-    parser.add_argument('--planner', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm'],
-                        help='One of {vicuna, chatgpt, llama2}.')
+    parser.add_argument('--system', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
+    parser.add_argument('--user', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
+    parser.add_argument('--critic', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
+    parser.add_argument('--planner', type=str, default='vicuna', choices=['vicuna','chatgpt','llama2', 'chatglm', 'ollama'],
+                        help='One of {vicuna, chatgpt, llama2, ollama}.')
     parser.add_argument('--sft_dir', default='sft', #../pretrain/outputs/best_pretrain.pt
                         type=str, help="Pretrain model path.")
     parser.add_argument('--max_turn', type=int, default=8, help='max conversation turn')
@@ -515,7 +514,6 @@ def parse_args():
     
     parser.add_argument('--use_wandb', action='store_true')
 
-    add_model_args(parser)
     args = parser.parse_args()
     
     return args
@@ -556,6 +554,7 @@ def main(args):
     logger.info('data_set:{}'.format(args.data_name))
     
     if args.use_wandb:
+        import wandb
         wandb.init(
             # set the wandb project where this run will be logged
             project="pdp",

@@ -2,7 +2,8 @@ from torch.distributions import Categorical
 import random
 import numpy as np
 from tqdm import tqdm
-from transformers import AdamW, BertModel, RobertaModel, AutoModelForSeq2SeqLM, AutoTokenizer
+from torch.optim import AdamW
+from transformers import BertModel, RobertaModel, AutoModelForSeq2SeqLM, AutoTokenizer
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
 import torch.nn.functional as F

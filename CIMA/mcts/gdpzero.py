@@ -6,7 +6,7 @@ import random
 
 from tqdm.auto import tqdm
 from mcts.core.gen_models import (
-	LocalModel, OpenAIModel, OpenAIChatModel, ChatGLM3Model
+	LocalModel, OpenAIModel, OpenAIChatModel, ChatGLM3Model, OllamaModel
 )
 from mcts.core.esc_players import (
 	TherapistModel, PatientModel, ESCSystemPlanner,
@@ -63,6 +63,7 @@ class GDPZero:
         llm_dict = {
             'chatgpt': OpenAIChatModel,
             'chatglm': ChatGLM3Model,
+            'ollama': OllamaModel,
         }
         
         self.system_model = llm_dict[cmd_args.system](cmd_args, cmd_args.system)
@@ -161,9 +162,9 @@ if __name__ == "__main__":
     parser.add_argument('--n_test', type=int, default=500) #    
     parser.add_argument('--output', type=str, default="outputs/gdpzero.pkl", help='output file')
     parser.add_argument('--log_dir', type=str, default="log", help='log file')
-    parser.add_argument('--llm', type=str, default="code-davinci-002", choices=["code-davinci-002", "chatgpt", "gpt-3.5-turbo", "chatglm", 
+    parser.add_argument('--llm', type=str, default="code-davinci-002", choices=["code-davinci-002", "chatgpt", "gpt-3.5-turbo", "chatglm",
                                                                                 "qwen-7b-chat", "meta/llama-2-7b-chat", "meta/llama-2-13b-chat",
-                                                                                "meta/llama-2-70b-chat"], 
+                                                                                "meta/llama-2-70b-chat", "ollama"],
                         help='OpenAI model name')
     parser.add_argument('--gen_sentences', type=int, default=-1, help='number of sentences to generate from the llm. Longer ones will be truncated by nltk.')
     parser.add_argument('--num_mcts_sims', type=int, default=20, help='number of mcts simulations')

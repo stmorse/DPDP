@@ -14,7 +14,6 @@ from mcts.core.helpers import DialogSession
 from functools import lru_cache
 from tenacity import retry, stop_after_attempt,	wait_exponential, wait_fixed  # for exponential backoff
 from mcts.utils.utils import hashabledict
-import replicate
 from ppdpp.utils import openai_keys, sample_openai_key
 
 
@@ -286,6 +285,43 @@ class OpenAIChatModel(OpenAIModel):
 		pool.close()
 		pool.join()
 		return [r.get() for r in results]
+
+
+class OllamaModel(OpenAIChatModel):
+	"""OpenAI-compatible client pointing at a local Ollama server."""
+
+	OLLAMA_BASE_URL = "http://localhost:11434/v1"
+
+	def __init__(self, args, model_name="llama3.2:latest", gen_sentences=-1):
+		super().__init__(args, model_name=model_name, gen_sentences=gen_sentences)
+		self.inference_args["model"] = "llama3.2:latest"
+		self.apply_chatgpt_times = 0
+
+	def query_openai_model(self, parameters):
+		client = OpenAI(base_url=self.OLLAMA_BASE_URL, api_key="ollama")
+		n = parameters.get("n", 1)
+		flag = True
+		while flag:
+			try:
+				start_t = time.time()
+				outputs = []
+				for _ in range(n):
+					completions = client.chat.completions.create(
+						model=parameters["model"],
+						messages=parameters["messages"],
+						max_tokens=parameters["max_tokens"],
+						n=1,
+						stop=None,
+						temperature=parameters["temperature"],
+					)
+					outputs.append(completions.choices[0].message.content.strip())
+				flag = False
+				end_t = time.time()
+				self.apply_chatgpt_times += 1
+			except Exception as e:
+				print(f"Ollama error: {e}")
+				time.sleep(5)
+		return outputs
 
 
 class ChatGLM3Model(OpenAIModel):

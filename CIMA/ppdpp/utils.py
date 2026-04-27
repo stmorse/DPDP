@@ -60,7 +60,11 @@ def enablePrint():
 def load_dataset(data_name):
     dataset = {'train':[], 'test':[], 'valid':[]}
     for key in dataset:
-        with open("./data/%s-%s-chatgpt-state-0613.txt"%(data_name, key),'r') as infile:
+        path = "./data/%s-%s-chatgpt-state-0613.txt"%(data_name, key)
+        if not os.path.exists(path):
+            logging.warning("Dataset file not found, skipping: %s", path)
+            continue
+        with open(path,'r') as infile:
             for line in infile:
                 dataset[key].append(eval(line.strip('\n')))
     return dataset

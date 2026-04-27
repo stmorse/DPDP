@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+.python-version
+uv.lock
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Model checkpoints / weights
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.h5
+
+# HuggingFace cache (downloaded models)
+plm/models--*/
+plm/.locks/
+**/models--*/
+**/.locks/
+
+# Training outputs
+sft/
+tmp/
+runs/
+wandb/
+outputs/
+checkpoints/
+
+# Large preprocessed data caches
+**/sft_*_train_*/
+**/sft_*_valid_*/
+**/sft_*_test_*/
+
+# Pre-generated state files (large, model-specific)
+**/*-chatgpt-state-*.txt
+**/*-state-*.txt

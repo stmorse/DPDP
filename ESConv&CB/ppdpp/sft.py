@@ -448,6 +448,8 @@ def arg_parser():
     parser.add_argument("--action_num_return_sequences", type=int, default=15)
     parser.add_argument("--reward_num_return_sequences", type=int, default=10)
     parser.add_argument('--use_policy_prior', action='store_true')
+    parser.add_argument('--use_mcts_sys_resp', action='store_true')
+    parser.add_argument('--use_mcts_usr_resp', action='store_true')
     
     parser.add_argument("--chip_training_times", type=int, default=1)
     parser.add_argument("--critic_loss_w", type=float, default=1.0)
@@ -459,9 +461,9 @@ def arg_parser():
 
 
 def main(args):
-    args.output_dir = os.path.join(args.output_dir, args.data_name, "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(args.model_name, args.num_train_epochs, args.warmup_steps, 
-                                                                                                           args.learning_rate, args.weight_decay, args.adam_epsilon, 
-                                                                                                           args.max_grad_norm, args.critic_loss_w, args.dropout, 
+    args.output_dir = os.path.join(args.output_dir, args.data_name, "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(args.model_name, args.num_train_epochs, args.warmup_steps,
+                                                                                                           args.learning_rate, args.weight_decay, args.adam_epsilon,
+                                                                                                           args.max_grad_norm, args.critic_loss_w, args.dropout,
                                                                                                            args.neg_reward))
     # Create output directory if needed
     if not os.path.exists(args.output_dir):

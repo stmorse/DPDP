@@ -157,7 +157,7 @@ class Env(object):
                 mcts_state.add_single(user_role[self.args.data_name], user_action, user_response)
 
         if self.args.data_name == 'esc':
-            if reward > 0.1:
+            if reward >= 0.1:
                 self.logger.info('--> Goal completed !')
                 done = 1
             else:
@@ -187,20 +187,23 @@ class Env(object):
                     done = -1
                 else:
                     self.logger.info('--> On-going !')
-                
+
         self.cur_conver_step += 1
         return self.conversation, reward, done
-    
+
     def unfold_mcts_state(self, mcts_state, full_mcts_history, mcts_turn):
         done = 0
         self.logger.info('---------------step:{}-------------'.format(self.cur_conver_step))
-        
+
         full_mcts_state, full_mcts_rewards = full_mcts_history['state'], full_mcts_history['rewards']
-        start_pos = len(self.conversation)
+        # ESConv's env.conversation starts with 1 entry (patient situation); mcts_state.history
+        # starts with 2 (Therapist greeting + patient). CIMA/CB start with 2 in both. Offset accordingly.
+        init_offset = 1 if self.args.data_name == 'esc' else 0
+        start_pos = len(self.conversation) + init_offset
         assert full_mcts_state[start_pos][0] == system_role[self.args.data_name]
         self.conversation.append({"role": system_role[self.args.data_name], "content": full_mcts_state[start_pos][-1]})
         self.logger.info(json.dumps(self.conversation[-1]))
-        
+
         assert full_mcts_state[start_pos + 1][0] == user_role[self.args.data_name]
         self.conversation.append({"role": user_role[self.args.data_name], "content": full_mcts_state[start_pos + 1][-1]})
         self.logger.info(json.dumps(self.conversation[-1]))
@@ -217,7 +220,7 @@ class Env(object):
             raise ValueError
         
         if self.args.data_name == 'esc':
-            if reward > 0.1:
+            if reward >= 0.1:
                 self.logger.info('--> Goal completed !')
                 done = 1
             else:
@@ -317,10 +320,10 @@ class Env(object):
             messages = chatgpt_prompt(messages, role)
             output = query_openai_model(
                 messages=messages,
-                model="llama3.2:latest",
+                model=os.environ.get("LLM_MODEL", "llama3.2:latest"),
                 max_tokens=self.args.resp_max_new_tokens,
                 temperature=temperature,
-                base_url="http://localhost:11434/v1",
+                base_url=os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),
             )
             self.apply_chatgpt_times += 1
         return output
@@ -376,11 +379,11 @@ class Env(object):
             messages = chatgpt_prompt(messages, user_role[self.args.data_name])
             outputs = query_openai_model(
                 messages=messages,
-                model="llama3.2:latest",
+                model=os.environ.get("LLM_MODEL", "llama3.2:latest"),
                 max_tokens=self.args.reward_max_new_tokens,
                 temperature=1.1,
                 n=10,
-                base_url="http://localhost:11434/v1",
+                base_url=os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),
             )
             self.apply_chatgpt_times += 1
 
@@ -441,7 +444,8 @@ def query_openai_model(messages: str, model: str = "gpt-3.5-turbo-0613", max_tok
     while flag:
         try:
             start_t = time.time()
-            if base_url and n > 1:
+            looks_like_ollama = base_url and any(s in base_url for s in ("localhost", "11434", "ollama"))
+            if looks_like_ollama and n > 1:
                 # Ollama doesn't support n>1, so loop
                 output = []
                 for _ in range(n):

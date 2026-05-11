@@ -303,10 +303,10 @@ class Env(object):
             messages = chatgpt_prompt(messages, role)
             output = query_openai_model(
                 messages=messages,
-                model="llama3.2:latest",
+                model=os.environ.get("LLM_MODEL", "llama3.2:latest"),
                 max_tokens=self.args.resp_max_new_tokens,
                 temperature=temperature,
-                base_url="http://localhost:11434/v1",
+                base_url=os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),
             )
             self.apply_chatgpt_times += 1
         return output
@@ -362,11 +362,11 @@ class Env(object):
             messages = chatgpt_prompt(messages, user_role[self.args.data_name])
             outputs = query_openai_model(
                 messages=messages,
-                model="llama3.2:latest",
+                model=os.environ.get("LLM_MODEL", "llama3.2:latest"),
                 max_tokens=self.args.reward_max_new_tokens,
                 temperature=1.1,
                 n=10,
-                base_url="http://localhost:11434/v1",
+                base_url=os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),
             )
             self.apply_chatgpt_times += 1
 
@@ -423,7 +423,8 @@ def query_openai_model(messages: str, model: str = "gpt-3.5-turbo-0613", max_tok
     while flag:
         try:
             start_t = time.time()
-            if base_url and n > 1:
+            looks_like_ollama = base_url and any(s in base_url for s in ("localhost", "11434", "ollama"))
+            if looks_like_ollama and n > 1:
                 # Ollama doesn't support n>1, so loop
                 output = []
                 for _ in range(n):

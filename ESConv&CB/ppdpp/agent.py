@@ -31,7 +31,10 @@ class PPDPP(nn.Module):
         super().__init__()
         self.logger = args.logger
         self.sys_role, self.usr_role = system_role[args.data_name], user_role[args.data_name]
-        self.policy = model[args.model_name].from_pretrained(args.model_name_or_path, from_tf=bool('.ckpt' in args.model_name_or_path), config=config)
+        if getattr(args, 'skip_policy_load', False):
+            self.policy = None
+        else:
+            self.policy = model[args.model_name].from_pretrained(args.model_name_or_path, from_tf=bool('.ckpt' in args.model_name_or_path), config=config)
         self.dropout = nn.Dropout(args.dropout)
         self.act = sorted(list(act[args.data_name].keys()))
         self.inv_act = {act: idx for idx, act in enumerate(self.act)}
@@ -141,10 +144,21 @@ class PPDPP(nn.Module):
     
     def select_action(self, state, mcts_state, action=None, is_test=False, transition_dict=None):
         use_mcts = True
-        action_dist, qvs = self.apply_policy(state)
-        m = Categorical(action_dist)
+        if self.policy is None:
+            action_dist, qvs, m = None, None, None
+        else:
+            action_dist, qvs = self.apply_policy(state)
+            m = Categorical(action_dist)
         if action is None:
-            if is_test:
+            if is_test and action_dist is None:
+                # Policy network not loaded -- always go to MCTS
+                mcts_state, reward, full_mcts_history, transition_dict, apply_chatgpt_times = self.select_action_by_mcts(mcts_state, state, transition_dict)
+                action = mcts_state[-2][1]
+                action = self.inv_act[action]
+                self.logger.info('Choose action "{}" by MCTS...'.format(self.act[action]))
+                self.apply_mcts_times += 1
+                self.apply_chatgpt_times += apply_chatgpt_times
+            elif is_test:
                 # entropy = utils.safe_entropy(action_dist)
                 # if entropy <= self.ent_bound:
                 topk_probs, _ = torch.topk(action_dist, k=2)

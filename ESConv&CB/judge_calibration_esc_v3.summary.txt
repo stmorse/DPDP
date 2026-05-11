@@ -1,0 +1,35 @@
+======================================================================
+Judge calibration summary
+======================================================================
+data_path: data/esc-valid.txt
+N dialogues scored: 20  (start=0)
+max_turn=8  n=10  temp=1.1  max_tokens=16
+
+[gpt] gpt-4o-mini @ https://api.openai.com/v1
+  total samples : 1540
+  drops (no kw) : 0  (0.0%)
+    worse  :     3  (  0.2% of matched)
+    same   :  1068  ( 69.4% of matched)
+    better :   468  ( 30.4% of matched)
+    solved :     1  (  0.1% of matched)
+
+[llama] llama3.2:latest @ http://localhost:11434/v1
+  total samples : 1540
+  drops (no kw) : 60  (3.9%)
+    worse  :   506  ( 34.2% of matched)
+    same   :   487  ( 32.9% of matched)
+    better :   448  ( 30.3% of matched)
+    solved :    39  (  2.6% of matched)
+
+Pairwise comparison: [gpt] vs [llama]
+  per-turn mean-reward Pearson r : 0.273  (n_turns=154)
+  per-turn mean-reward delta     : mean=+0.134  std=0.292  |mean|=0.264
+  majority-class agreement       : 32.5%  (n_turns_both_matched=154)
+  Cohen's kappa (majority class) : 0.021
+
+Env-style SR (early-stop at mean_reward >= 0.1):
+  [gpt] SR=0.550 (SE 0.114)  AvgT=7.25  n=20
+  [llama] SR=0.200 (SE 0.092)  AvgT=7.50  n=20
+  per-dialogue success agreement : 13/20 (65.0%)
+    both success: 4   both fail: 9   only-gpt: 7   only-llama: 0
+  Cohen's kappa (success label)  : 0.340

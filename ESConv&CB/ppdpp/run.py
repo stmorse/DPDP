@@ -25,19 +25,20 @@ def train(args, config, dataset, filename, tokenizer):
     policy = policy.to(args.device)
 
     # load policy parameters
-    if args.sft_dir is not None:
-        logger.info('Staring loading policy model from {}'.format(args.sft_dir))
-        policy.load_model(data_name=args.data_name, filename=args.sft_dir, device=args.device, logger=logger)
-        policy.update_target_qnet()
-    
-    if args.load_rl_epoch > 0:
-        logger.info('Staring loading rl model in epoch {}'.format(args.load_rl_epoch))
-        policy.load_model(data_name=args.data_name, filename=filename, epoch_user=args.load_rl_epoch, device=args.device, logger=logger)
-    
-    if args.checkpoint_path:
-        checkpoint_path = TMP_DIR[args.data_name] + '/RL-agent/' + args.checkpoint_path
-        logger.info('Staring loading policy model from {}'.format(checkpoint_path))
-        policy.load_model(data_name=args.data_name, filename=checkpoint_path, device=args.device, logger=logger)
+    if not args.skip_policy_load:
+        if args.sft_dir is not None:
+            logger.info('Staring loading policy model from {}'.format(args.sft_dir))
+            policy.load_model(data_name=args.data_name, filename=args.sft_dir, device=args.device, logger=logger)
+            policy.update_target_qnet()
+
+        if args.load_rl_epoch > 0:
+            logger.info('Staring loading rl model in epoch {}'.format(args.load_rl_epoch))
+            policy.load_model(data_name=args.data_name, filename=filename, epoch_user=args.load_rl_epoch, device=args.device, logger=logger)
+
+        if args.checkpoint_path:
+            checkpoint_path = TMP_DIR[args.data_name] + '/RL-agent/' + args.checkpoint_path
+            logger.info('Staring loading policy model from {}'.format(checkpoint_path))
+            policy.load_model(data_name=args.data_name, filename=checkpoint_path, device=args.device, logger=logger)
 
     test_performance = []
     policy.apply_policy_times = 0.0
@@ -70,9 +71,10 @@ def train(args, config, dataset, filename, tokenizer):
                 if full_mcts_history is None:
                     action, mcts_state, reward, full_mcts_history, transition_dict, use_mcts = policy.select_action(state, mcts_state, transition_dict=transition_dict)
                 else:
+                    init_offset = 1 if args.data_name == 'esc' else 0
                     try:
-                        assert full_mcts_history['state'][len(state)][0] == system_role[args.data_name]
-                        action = policy.inv_act[full_mcts_history['state'][len(state)][1]]
+                        assert full_mcts_history['state'][len(state) + init_offset][0] == system_role[args.data_name]
+                        action = policy.inv_act[full_mcts_history['state'][len(state) + init_offset][1]]
                     except:
                         print('full mcts history: ', full_mcts_history)
                         print('state: ', state)
@@ -167,7 +169,7 @@ def evaluate(args, dataset, policy, filename, i_episode, train_env, mode='valid'
     policy.action_freq = ddict(int)
     logger.info('\n================Evaluation Epoch: {}===================='.format(i_episode))
     with torch.no_grad():
-        for test_num in tqdm(range(start_index, test_size)):  #test_size
+        for test_num in tqdm(range(start_index, start_index + test_size)):  #test_size
             #blockPrint()
             logger.info('\n================test tuple:{}===================='.format(test_num))
             epi_reward = 0
@@ -180,11 +182,12 @@ def evaluate(args, dataset, policy, filename, i_episode, train_env, mode='valid'
                 if full_mcts_history is None:
                     action, mcts_state, reward, full_mcts_history, transition_dict, use_mcts = policy.select_action(state, mcts_state, is_test=True, transition_dict=transition_dict)
                 else:
-                    assert full_mcts_history['state'][len(state)][0] == system_role[args.data_name]
-                    action = policy.inv_act[full_mcts_history['state'][len(state)][1]]
+                    init_offset = 1 if args.data_name == 'esc' else 0
+                    assert full_mcts_history['state'][len(state) + init_offset][0] == system_role[args.data_name]
+                    action = policy.inv_act[full_mcts_history['state'][len(state) + init_offset][1]]
                     action, mcts_state, reward, _, transition_dict, use_mcts = policy.select_action(state, mcts_state, action, is_test=True, transition_dict=transition_dict)
-                
-                if full_mcts_history is None:    
+
+                if full_mcts_history is None:
                     state, reward, done = test_env.step(action, mcts_state, reward, use_mcts)
                 else:
                     state, reward, done = test_env.unfold_mcts_state(mcts_state, full_mcts_history, mcts_turn)
@@ -488,6 +491,9 @@ def parse_args():
     parser.add_argument('--mcts_applied_ratio', type=float, default=0.0)
     parser.add_argument('--use_mcts_sys_resp', action='store_true')
     parser.add_argument('--use_mcts_usr_resp', action='store_true')
+    parser.add_argument('--skip_policy_load', action='store_true',
+                        help='Skip loading the roberta-large policy network entirely. '
+                             'Only valid for eval with --mcts_applied_ratio 1.0 and without --use_policy_prior.')
     
     parser.add_argument("--dropout", default=0.05, type=float)
     
@@ -527,6 +533,10 @@ def main(args):
     #os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     args.raw_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     args.device = torch.device('cuda:{}'.format(args.device_id)) if torch.cuda.is_available() else 'cpu'
+    if args.skip_policy_load:
+        assert not args.do_train, '--skip_policy_load incompatible with --do_train'
+        assert args.mcts_applied_ratio == 1.0, '--skip_policy_load requires --mcts_applied_ratio 1.0 (policy gate would otherwise read action_dist)'
+        assert not args.use_policy_prior, '--skip_policy_load incompatible with --use_policy_prior (predict() would call apply_policy)'
     if args.do_train:
         trained = 'trained'
     elif args.do_eval:

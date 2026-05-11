@@ -288,17 +288,23 @@ class OpenAIChatModel(OpenAIModel):
 
 
 class OllamaModel(OpenAIChatModel):
-	"""OpenAI-compatible client pointing at a local Ollama server."""
+	"""OpenAI-compatible client. Defaults to local Ollama; point at any
+	OpenAI-compatible endpoint by setting LLM_BASE_URL and LLM_MODEL env vars
+	(plus OPENAI_API_KEY if the endpoint requires authentication)."""
 
-	OLLAMA_BASE_URL = "http://localhost:11434/v1"
+	DEFAULT_BASE_URL = "http://localhost:11434/v1"
+	DEFAULT_MODEL = "llama3.2:latest"
 
-	def __init__(self, args, model_name="llama3.2:latest", gen_sentences=-1):
-		super().__init__(args, model_name=model_name, gen_sentences=gen_sentences)
-		self.inference_args["model"] = "llama3.2:latest"
+	def __init__(self, args, model_name=None, gen_sentences=-1):
+		resolved_model = os.environ.get("LLM_MODEL", model_name or self.DEFAULT_MODEL)
+		super().__init__(args, model_name=resolved_model, gen_sentences=gen_sentences)
+		self.base_url = os.environ.get("LLM_BASE_URL", self.DEFAULT_BASE_URL)
+		self.inference_args["model"] = resolved_model
 		self.apply_chatgpt_times = 0
 
 	def query_openai_model(self, parameters):
-		client = OpenAI(base_url=self.OLLAMA_BASE_URL, api_key="ollama")
+		api_key = os.environ.get("OPENAI_API_KEY", "ollama")
+		client = OpenAI(base_url=self.base_url, api_key=api_key)
 		n = parameters.get("n", 1)
 		flag = True
 		while flag:
@@ -319,7 +325,7 @@ class OllamaModel(OpenAIChatModel):
 				end_t = time.time()
 				self.apply_chatgpt_times += 1
 			except Exception as e:
-				print(f"Ollama error: {e}")
+				print(f"LLM error: {e}")
 				time.sleep(5)
 		return outputs
 

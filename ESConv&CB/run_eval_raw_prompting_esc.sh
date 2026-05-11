@@ -56,4 +56,5 @@ python -m ppdpp.run \
     --train_batch_size 4 \
     --target_update_count -1 \
     --critic_loss_w 1.0 \
+    --skip_policy_load \
     --remark raw_prompting

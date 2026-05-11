@@ -202,7 +202,7 @@ class OpenLoopMCTS(MCTS):
 		transition_dict['actions'].append(int(best_action))
 		transition_dict['next_states'].append(next_agent_state)
 		transition_dict['rewards'].append(v)
-		transition_dict['dones'].append(1.0 if v > self.success_base else 0.0)
+		transition_dict['dones'].append(1.0 if v >= self.success_base else 0.0)
 		return next_state, next_agent_state, v, transition_dict
 	
 	def _update_realizations_Vs(self, state: DialogSession, v: float):
@@ -273,7 +273,7 @@ class OpenLoopMCTS(MCTS):
 
 		# update stats
 		# add in new estimate and average
-		used_leaf_v = 1.0 if leaf_v > self.success_base else leaf_v
+		used_leaf_v = 1.0 if leaf_v >= self.success_base else leaf_v
 		self.Q[hashable_state][best_action] = (self.Nsa[hashable_state][best_action] * self.Q[hashable_state][best_action] + used_leaf_v) / (self.Nsa[hashable_state][best_action] + 1)
 		self.Ns[hashable_state] += 1
 		self.Nsa[hashable_state][best_action] += 1
@@ -300,7 +300,7 @@ class OpenLoopMCTS(MCTS):
 	def traverse_valid_path(self, state, rewards):
 		hashable_state = self._to_string_rep(state)
 		try:
-			if self.Vs[hashable_state][0] > self.success_base:
+			if self.Vs[hashable_state][0] >= self.success_base:
 				rewards.append(self.Vs[hashable_state][0])
 				return {'state': state.history, 'rewards': rewards}
 		except:

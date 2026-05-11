@@ -34,7 +34,7 @@ python -m ppdpp.run \
     --eval_num 1 \
     --save_num 1 \
     --output_dir ppdpp \
-    --sft_dir roberta_10_400_6e-06_0.001_1e-08_1.0_1.0_0.1_-1.0 \
+    --sft_dir roberta_10.0_400_6e-06_0.001_1e-08_1.0_1.0_0.1_-1.0 \
     --zero_shot \
     --device_id 0 \
     --num_gpus 1 \

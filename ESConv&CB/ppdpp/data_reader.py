@@ -45,7 +45,7 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
         write_pkl(features, cached_features_file)
     return features
 
-def map_esconv_resp_to_reward(case, resps):
+def map_esconv_resp_to_reward(args, case, resps):
     rewards = []
     for resp in resps:
         resp = resp.lower()
@@ -59,7 +59,7 @@ def map_esconv_resp_to_reward(case, resps):
             rewards.append(reward_dict['esc']['same'])
     return np.mean(rewards)
 
-def map_cima_resp_to_reward(case, resps):
+def map_cima_resp_to_reward(args, case, resps):
     rewards = []
     for resp in resps:
         resp = resp.lower()

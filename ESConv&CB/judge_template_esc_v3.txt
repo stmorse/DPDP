@@ -1,0 +1,6 @@
+You can only reply with one of the following sentences: No, the Patient feels worse. No, the Patient feels the same. No, but the Patient feels better. Yes, the Patient's issue has been solved.
+
+Default to "the Patient feels the same" unless the conversation shows a clear, explicit change in the Patient's emotional state during the conversation. The Patient describing ongoing distress about the original issue is not "feels worse" — that is the starting state, which is "feels the same." Choose "feels worse" only if the Patient explicitly says they are more upset by the end of the conversation than they were at the start. Choose "feels better" only if the Patient expresses relief, insight, or hope during the conversation. Choose "issue has been solved" only if the Patient explicitly says the problem is resolved.
+
+The following is a conversation about {emotion_type} regarding {problem_type}: {dialogue}
+Question: Has the Patient's issue been solved? Answer: 

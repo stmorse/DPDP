@@ -41,7 +41,7 @@ class DialogGame(ABC):
 		return DialogSession(self.SYS, self.USR)
 
 	def map_user_action(self, v, sampled_das):
-		if v > self.success_base:
+		if v >= self.success_base:
 			return EmotionalSupportGame.U_Solved
 		da_dict = ddict(int)	
 		for sample_da in sampled_das:

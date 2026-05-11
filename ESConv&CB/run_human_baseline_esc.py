@@ -3,19 +3,22 @@ same critic the env uses, measure SR (goal completed within max_turn) and AvgT.
 
 Mirrors ppdpp/env.py's compute_reward and step() goal logic exactly:
 - Build the critic prompt via ESConvMessages(role='critic')
-- Sample n=10 outputs from ollama at temperature 1.1
+- Sample n=10 outputs at temperature 1.1
 - Parse keyword rewards: worse(-1), same(-0.5), better(0.1), solved(1.0)
 - Average; goal completed if avg > 0.1
 - Replays at most max_turn=8 sys-usr exchanges per dialogue.
 
-Usage:
-    cd ESConv\&CB
-    source ../.venv/bin/activate
-    export PYTHONPATH=$(pwd)
-    python run_human_baseline_esc.py [--data_path data/esc-valid.txt] [--max_turn 8]
+Backend selection via env vars (matches the env-based eval scripts):
+- LLM_BASE_URL  default http://localhost:11434/v1 (ollama). Set to
+                https://api.openai.com/v1 for OpenAI.
+- LLM_MODEL     default llama3.2:latest. Set to gpt-4o-mini etc. for OpenAI.
+- OPENAI_API_KEY required when LLM_BASE_URL points at api.openai.com.
+
+CLI flags --ollama_url / --ollama_model still work and override the env vars.
 """
 import argparse
 import json
+import os
 import sys
 from collections import defaultdict
 
@@ -40,8 +43,8 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument('--data_path', default='data/esc-valid.txt')
     p.add_argument('--max_turn', type=int, default=8)
-    p.add_argument('--ollama_url', default='http://localhost:11434/v1')
-    p.add_argument('--ollama_model', default='llama3.2:latest')
+    p.add_argument('--ollama_url', default=os.environ.get('LLM_BASE_URL', 'http://localhost:11434/v1'))
+    p.add_argument('--ollama_model', default=os.environ.get('LLM_MODEL', 'llama3.2:latest'))
     p.add_argument('--n_critic_samples', type=int, default=10)
     p.add_argument('--max_tokens', type=int, default=16)
     p.add_argument('--temperature', type=float, default=1.1)
@@ -49,19 +52,22 @@ def parse_args():
     return p.parse_args()
 
 
-def query_critic(client, model, messages, n, max_tokens, temperature):
-    """Ollama doesn't support n>1, so loop."""
-    outputs = []
-    for _ in range(n):
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            n=1,
-        )
-        outputs.append(resp.choices[0].message.content)
-    return outputs
+def query_critic(client, model, messages, n, max_tokens, temperature, looks_like_ollama):
+    """Ollama doesn't support n>1, so loop. Real OpenAI: use native n."""
+    if looks_like_ollama:
+        outputs = []
+        for _ in range(n):
+            resp = client.chat.completions.create(
+                model=model, messages=messages, max_tokens=max_tokens,
+                temperature=temperature, n=1,
+            )
+            outputs.append(resp.choices[0].message.content)
+        return outputs
+    resp = client.chat.completions.create(
+        model=model, messages=messages, max_tokens=max_tokens,
+        temperature=temperature, n=n,
+    )
+    return [c.message.content for c in resp.choices]
 
 
 def parse_reward(outputs):
@@ -105,7 +111,7 @@ def pair_turns(dialog):
     return pairs
 
 
-def replay(client, args, case, log):
+def replay(client, args, case, log, looks_like_ollama):
     pairs = pair_turns(case['dialog'])
     conversation = [{"role": USER_ROLE, "content": case['situation']}]
 
@@ -120,18 +126,22 @@ def replay(client, args, case, log):
             n=args.n_critic_samples,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            looks_like_ollama=looks_like_ollama,
         )
         reward, counts = parse_reward(outputs)
         log.write(f"  turn {t}: reward={reward:.3f}  counts={dict(counts)}\n")
 
-        if reward > GOAL_THRESHOLD:
+        if reward >= GOAL_THRESHOLD:
             return 1, t + 1
     return 0, min(len(pairs), args.max_turn)
 
 
 def main():
     args = parse_args()
-    client = OpenAI(base_url=args.ollama_url, api_key='ollama')
+    api_key = os.environ.get('OPENAI_API_KEY', 'ollama')
+    client = OpenAI(base_url=args.ollama_url, api_key=api_key)
+    looks_like_ollama = any(s in args.ollama_url for s in ('localhost', '11434', 'ollama'))
+    print(f"backend: base_url={args.ollama_url}  model={args.ollama_model}  ollama_loop={looks_like_ollama}", flush=True)
 
     with open(args.data_path) as f:
         cases = [json.loads(line) for line in f if line.strip()]
@@ -142,7 +152,7 @@ def main():
             log.write(f"\n=== case {i} ({case.get('emotion_type')}/{case.get('problem_type')}) ===\n")
             log.flush()
             try:
-                success, turns = replay(client, args, case, log)
+                success, turns = replay(client, args, case, log, looks_like_ollama)
             except Exception as e:
                 log.write(f"  ERROR: {e}\n")
                 continue

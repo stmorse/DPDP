@@ -67,7 +67,7 @@ class Env(object):
         self.max_turn = args.max_turn
         self.conversation = []
         self.cur_conver_step = 0
-        self.test_num = 0
+        self.test_num = getattr(args, 'eval_start_index', 0)
         self.mode = mode
 
         self.reward_dict = {

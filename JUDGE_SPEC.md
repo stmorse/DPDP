@@ -249,10 +249,20 @@ the default config, and no per-sample confidence.
 ## 7. Cross-model-drift checklist
 
 When a strong-vs-weak judge gives systematically different scores on
-the *same* dialogues, walk this list before adjusting prompts:
+the *same* dialogues, walk this list before adjusting prompts. Ordered
+roughly by empirical impact (see §9 for the gpt-4o-mini vs llama3.2
+study that drives this ordering):
 
+- **Class distribution over the 10 samples.** Log the per-class counts
+  per judge across many dialogues. With a 4-class scheme like ESConv,
+  a strong judge may concentrate mass on one class (we saw gpt-4o-mini
+  put ~74% on "same") while a weak judge spreads or shifts to another
+  (llama3.2 essentially never picks "same"). Threshold and reward-mean
+  behavior change drastically even when aggregate SR looks comparable.
 - **Drop rate.** Log how many of the 10 samples matched a keyword.
-  Compare across judges. A drop-rate gap is the loudest tell.
+  Compare across judges. A drop-rate gap is a real but secondary tell —
+  earlier versions of this doc named it the primary culprit; the
+  empirical study in §9 showed class-distribution drift dominates it.
 - **Output length.** With `max_tokens=16` the strong judge usually
   finishes one canonical sentence; the weak one may truncate mid-clause
   in a way that changes which keyword appears first. Try `max_tokens=32`
@@ -288,3 +298,110 @@ the *same* dialogues, walk this list before adjusting prompts:
 
 The CIMA folder has a parallel implementation at `CIMA/ppdpp/{prompt,env}.py`
 with the same structure.
+
+---
+
+## 9. Empirical calibration on ESConv (gpt-4o-mini vs llama3.2)
+
+The mechanical spec above was stress-tested by running the verbatim
+DPDP critic against the gold human dialogues in the ESConv test split
+(n=130) under two LLM backends: `gpt-4o-mini` and `llama3.2:latest`
+(3B params) via local ollama. The same dialogue, same prompt, same
+sampling params (`n=10`, `temperature=1.1`, `max_tokens=16`), same
+parser — only the model identity differed. Results:
+
+### 9a. Headline numbers
+
+- **Aggregate SR overlaps within CI.** gpt-4o-mini 0.569 (±0.044),
+  llama3.2 0.485 (±0.044). Looks comparable on the surface.
+- **Per-dialogue success Cohen's κ = 0.157** ("slight agreement"). Only
+  57.7% of dialogues get the same success label from both judges;
+  33 dialogues are only-gpt successes and 22 are only-llama successes.
+  The aggregate SR agreement is largely coincidental cancellation.
+- **AvgT bias of ~1.6 turns.** On dialogues both judges call
+  successful, llama declares success ~1.6 turns earlier than gpt
+  because its heavier "better" mass trips the +0.1 threshold sooner.
+
+### 9b. Class distribution drift (the dominant lever)
+
+Pooled across all turns of all dialogues:
+
+| class    | reward | gpt-4o-mini | llama3.2:latest |
+|----------|-------:|------------:|----------------:|
+| worse    |   −1.0 |        ~13% |            ~34% |
+| same     |   −0.5 |        ~74% |             ~2% |
+| better   |   +0.1 |        ~10% |            ~60% |
+| solved   |   +1.0 |         ~3% |             ~4% |
+
+gpt-4o-mini concentrates mass on the "same" class — the natural
+no-progress default for ESConv where patients describe ongoing
+distress. llama3.2 essentially never picks "same" and instead
+oscillates between "worse" and "better," which is what drives both
+the AvgT bias and the per-dialogue disagreement.
+
+### 9c. Three prompt-engineering attempts, all hit a ceiling
+
+We tried prompt rewrites to nudge llama toward gpt's "same"-dominated
+distribution:
+
+- **v1** (no template change): verbatim DPDP critic prompt. Best on
+  per-dialogue κ and SR among the three; baseline for comparison.
+- **v2**: added "default to 'feels the same' unless… choose 'feels
+  worse' only if the Patient expresses increased distress…" llama
+  over-corrected to "worse"-dominated; SR crashed.
+- **v3**: refined v2 with explicit disambiguation — "ongoing distress
+  about the original issue is not 'feels worse' — that is the starting
+  state, which is 'feels the same.'" llama spread mass roughly
+  uniformly across worse/same/better; per-dialogue κ landed at 0.340,
+  still below v1.
+
+Per-turn class κ stuck near 0.02 across all three variants. Conclusion:
+**at this model-size gap (175B-class vs 3B), prompt engineering cannot
+align the judges' class distributions.** Larger open-weights models
+may behave differently, but no template-only fix bridges the gap with
+llama3.2:3b.
+
+### 9d. Pilot calibration overstates agreement
+
+A pilot run at n=20 dialogues reported per-dialogue κ=0.406 (fair
+agreement). The full n=130 collapsed to κ=0.157. Small-sample judge
+calibration is dangerously optimistic and should not be the basis
+for "the judges agree."
+
+### 9e. What's safe to compare across judges
+
+- **Within-judge method rankings** (e.g. "method X beats raw under
+  llama-judge") are valid — both methods are scored under the same
+  judge with the same class-distribution bias.
+- **Aggregate SR with explicit 95% CI** is the only cross-judge
+  headline number that travels. Report both judges side-by-side, not
+  pooled, with the κ=0.157 caveat in the methodology section.
+- **Per-dialogue success comparisons** (which dialogues count as
+  successes) are biased — the κ=0.157 says the judges disagree on
+  ~42% of dialogues. Do not say "method X solved dialogue Y" when
+  combining judge runs.
+- **AvgT** is meaningful within-judge only; cross-judge AvgT gaps
+  include a baked-in ~1.6-turn drift from class-distribution
+  differences.
+
+---
+
+## 10. Reproducibility tooling (this repo)
+
+To replicate the §9 study against any other LLM backend:
+
+- `ESConv&CB/calibrate_judge_esc.py` — multi-judge calibration walker.
+  Accepts repeatable `--judge name=X,url=X,model=X,api_key_env=X,
+  loop=X,template=X` flags. For each dialogue, walks every turn,
+  builds the critic prompt (optionally overridden via `template=`),
+  samples each configured judge `n=10` times, applies the verbatim
+  DPDP parser, and reports per-judge drop rates + class
+  distributions, pairwise per-turn Pearson r + majority-class κ, and
+  per-judge env-replay SR with per-dialogue success κ.
+- Per-dialogue log fixtures used in §9:
+  `ESConv&CB/human_baseline_esc_test_{oai,llama}_perdialog.log`.
+- Template variants tried in §9c:
+  `ESConv&CB/judge_template_esc_v{2,3}.txt`.
+
+If your project's judge fails the §7 checklist, this script is the
+minimum-overhead way to quantify the gap before adjusting prompts.
